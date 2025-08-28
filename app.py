@@ -46,7 +46,12 @@ class StudyTimerApp:
         style.configure('TLabel', font=(default_font_family, 12))
         style.configure('Status.TLabel', font=(default_font_family, 14, 'italic'))
         style.configure('Timer.TLabel', font=(default_font_family, 48))
-        style.configure("Goal.TProgressbar", thickness=20)
+        style.layout("Goal.TProgressbar",
+                     [('Horizontal.Progressbar.trough',
+                       {'children': [('Horizontal.Progressbar.pbar',
+                                      {'side': 'left', 'sticky': 'ns'})],
+                        'sticky': 'nswe'})])
+        style.configure("Goal.TProgressbar", thickness=20, background='green')
         style.configure("Treeview.Heading", font=(default_font_family, 12, 'bold'))
 
     def setup_ui(self):
@@ -79,7 +84,7 @@ class StudyTimerApp:
         self.goal_progressbar = ttk.Progressbar(goal_frame, orient="horizontal", length=300, mode="determinate", style="Goal.TProgressbar")
         self.goal_progressbar.pack(pady=5)
 
-        self.subjects = ["Math", "English", "Programming", "Reading"]
+        self.subjects = ["Chemistry", "English", "Information", "Japanese", "Math", "Physics", "Social Studies"]
         self.selected_subject = tk.StringVar(value=self.subjects[0])
         self.subject_menu = ttk.OptionMenu(parent_tab, self.selected_subject, self.subjects[0], *self.subjects)
         self.subject_menu.pack(pady=5)
