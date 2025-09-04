@@ -29,6 +29,11 @@ def init_db():
                 UNIQUE(goal_type, subject, start_date)
             )
         """)
+        try:
+            cursor.execute("ALTER TABLE goals ADD COLUMN start_date TEXT NOT NULL DEFAULT ''")
+        except sqlite3.OperationalError:
+            # Column already exists, which is fine
+            pass
         # Mock Exams table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS mock_exams (
@@ -68,10 +73,17 @@ def add_record(date, subject, minutes):
                        (date, subject, minutes))
         conn.commit()
 
+def delete_study_record(record_id):
+    """Deletes a study record."""
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM study_log WHERE id = ?", (record_id,))
+        conn.commit()
+
 def get_all_records():
     """Retrieves all study records and returns them as a pandas DataFrame."""
     with sqlite3.connect(DB_FILE) as conn:
-        df = pd.read_sql_query("SELECT date, subject, minutes FROM study_log", conn)
+        df = pd.read_sql_query("SELECT id, date, subject, minutes FROM study_log", conn)
     return df
 
 def set_goal(goal_type, subject, start_date, target_minutes, notes):
@@ -92,6 +104,13 @@ def get_goals():
     with sqlite3.connect(DB_FILE) as conn:
         df = pd.read_sql_query("SELECT id, goal_type, subject, start_date, target_minutes, notes FROM goals ORDER BY start_date DESC", conn)
     return df
+
+def delete_study_goal(goal_id):
+    """Deletes a study goal."""
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM goals WHERE id = ?", (goal_id,))
+        conn.commit()
 
 def get_progress(goal_type, subject, for_date):
     """Calculates the progress for a given goal for a specific date."""
@@ -156,6 +175,13 @@ def get_mock_exams():
     with sqlite3.connect(DB_FILE) as conn:
         df = pd.read_sql_query("SELECT id, date, subject, exam_name, score, max_score, deviation_value FROM mock_exams ORDER BY date DESC", conn)
     return df
+
+def delete_mock_exam(exam_id):
+    """Deletes a mock exam record."""
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM mock_exams WHERE id = ?", (exam_id,))
+        conn.commit()
 
 # --- Exam Goal Functions ---
 

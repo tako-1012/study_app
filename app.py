@@ -7,12 +7,17 @@ from visualize import show_analysis_window
 import database
 import report_generator
 import pandas as pd
+try:
+    from tkcalendar import DateEntry
+    CALENDAR_AVAILABLE = True
+except ImportError:
+    CALENDAR_AVAILABLE = False
 
 class StudyTimerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Study Time Logger")
-        self.root.geometry("800x600") # Adjusted for new tab
+        self.root.geometry("1000x800") # Larger size to show all UI elements
 
         database.init_db()
 
@@ -34,6 +39,7 @@ class StudyTimerApp:
         self.load_mock_exams()
         self.load_exam_goals()
         self.load_study_goals()
+        self.load_study_history()
         self.update_progress_display()
 
     def setup_styles(self):
@@ -62,16 +68,19 @@ class StudyTimerApp:
         notebook.pack(pady=10, padx=10, fill="both", expand=True)
 
         timer_tab = ttk.Frame(notebook)
+        study_history_tab = ttk.Frame(notebook)
         study_goals_tab = ttk.Frame(notebook)
         exam_goals_tab = ttk.Frame(notebook)
         mock_exam_tab = ttk.Frame(notebook)
 
         notebook.add(timer_tab, text='Timer')
+        notebook.add(study_history_tab, text='Study History')
         notebook.add(study_goals_tab, text='Study Goals')
         notebook.add(exam_goals_tab, text='Exam Goals')
         notebook.add(mock_exam_tab, text='Mock Exams')
 
         self.setup_timer_tab(timer_tab)
+        self.setup_study_history_tab(study_history_tab)
         self.setup_study_goals_tab(study_goals_tab)
         self.setup_exam_goals_tab(exam_goals_tab)
         self.setup_mock_exam_tab(mock_exam_tab)
@@ -118,18 +127,24 @@ class StudyTimerApp:
         self.reset_ui()
 
     def setup_study_goals_tab(self, parent_tab):
-        # Input frame
-        input_frame = ttk.LabelFrame(parent_tab, text="Set Study Time Goal", padding=10)
+        # Main frame for this tab with vertical layout
+        main_frame = ttk.Frame(parent_tab)
+        main_frame.pack(fill="both", expand=True)
+
+        # --- Input Frame ---
+        input_frame = ttk.LabelFrame(main_frame, text="Set Study Time Goal", padding=10)
         input_frame.pack(pady=10, padx=10, fill="x")
         input_frame.columnconfigure(1, weight=1)
 
         # Goal Type
         self.study_goal_type = tk.StringVar(value="daily")
         ttk.Label(input_frame, text="Goal Type:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        daily_radio = ttk.Radiobutton(input_frame, text="Daily", variable=self.study_goal_type, value="daily")
-        daily_radio.grid(row=0, column=1, padx=5, pady=5, sticky="w")
-        weekly_radio = ttk.Radiobutton(input_frame, text="Weekly", variable=self.study_goal_type, value="weekly")
-        weekly_radio.grid(row=0, column=1, padx=60, pady=5, sticky="w")
+        goal_type_frame = ttk.Frame(input_frame)
+        goal_type_frame.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+        daily_radio = ttk.Radiobutton(goal_type_frame, text="Daily", variable=self.study_goal_type, value="daily")
+        daily_radio.pack(side="left", padx=(0, 10))
+        weekly_radio = ttk.Radiobutton(goal_type_frame, text="Weekly", variable=self.study_goal_type, value="weekly")
+        weekly_radio.pack(side="left")
 
         # Subject
         all_subjects = ["All"] + self.subjects
@@ -144,31 +159,45 @@ class StudyTimerApp:
         self.study_goal_minutes_entry.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
 
         # Notes
-        ttk.Label(input_frame, text="Notes:").grid(row=3, column=0, padx=5, pady=5, sticky="nw")
+        ttk.Label(input_frame, text="Notes:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
         self.study_goal_notes_entry = ttk.Entry(input_frame)
         self.study_goal_notes_entry.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
 
-        # Save Button
         save_button = ttk.Button(input_frame, text="Set Goal", command=self.set_study_goal_callback)
         save_button.grid(row=4, column=0, columnspan=2, pady=10)
 
-        # Treeview to display goals
-        tree_frame = ttk.LabelFrame(parent_tab, text="Current Study Goals", padding=10)
-        tree_frame.pack(pady=10, padx=10, fill="both", expand=True)
+        # --- Treeview Frame ---
+        tree_frame = ttk.LabelFrame(main_frame, text="Current Study Goals", padding=10)
+        tree_frame.pack(pady=(0, 10), padx=10, fill="both", expand=True)
 
-        self.study_goals_tree = ttk.Treeview(tree_frame, columns=("Type", "Subject", "Target", "Notes"), show="headings")
+        self.study_goals_tree = ttk.Treeview(tree_frame, columns=("ID", "Type", "Subject", "Target", "Notes"), show="headings")
+        self.study_goals_tree.heading("ID", text="ID")
+        self.study_goals_tree.column("ID", width=0, stretch=tk.NO)
         self.study_goals_tree.heading("Type", text="Type")
         self.study_goals_tree.heading("Subject", text="Subject")
         self.study_goals_tree.heading("Target", text="Target (mins)")
         self.study_goals_tree.heading("Notes", text="Notes")
         self.study_goals_tree.column("Notes", width=250)
-        self.study_goals_tree.pack(fill="both", expand=True)
+        
+        tree_scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.study_goals_tree.yview)
+        self.study_goals_tree.configure(yscroll=tree_scrollbar.set)
+        tree_scrollbar.pack(side="right", fill="y")
+        self.study_goals_tree.pack(side="left", fill="both", expand=True)
+
+        # --- Buttons Frame ---
+        buttons_frame = ttk.Frame(main_frame)
+        buttons_frame.pack(pady=(0, 10), padx=10, fill="x")
+        delete_button = ttk.Button(buttons_frame, text="Delete Goal", command=self.delete_study_goal_callback)
+        delete_button.pack(side="right", padx=5)
 
     def setup_exam_goals_tab(self, parent_tab):
-        # Input frame
-        input_frame = ttk.LabelFrame(parent_tab, text="Set New Exam Goal", padding=10)
-        input_frame.pack(pady=10, padx=10, fill="x")
+        # Main frame for this tab with vertical layout
+        main_frame = ttk.Frame(parent_tab)
+        main_frame.pack(fill="both", expand=True)
 
+        # --- Input Frame ---
+        input_frame = ttk.LabelFrame(main_frame, text="Set New Exam Goal", padding=10)
+        input_frame.pack(pady=10, padx=10, fill="x")
         input_frame.columnconfigure(1, weight=1)
 
         ttk.Label(input_frame, text="Subject:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
@@ -180,8 +209,13 @@ class StudyTimerApp:
         self.goal_exam_name_entry = ttk.Entry(input_frame)
         self.goal_exam_name_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
 
-        ttk.Label(input_frame, text="Exam Date (YYYY-MM-DD):").grid(row=2, column=0, padx=5, pady=5, sticky="w")
-        self.goal_exam_date_entry = ttk.Entry(input_frame)
+        ttk.Label(input_frame, text="Exam Date:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        if CALENDAR_AVAILABLE:
+            self.goal_exam_date_entry = DateEntry(input_frame, width=12, background='darkblue',
+                                                 foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
+        else:
+            self.goal_exam_date_entry = ttk.Entry(input_frame)
+            self.goal_exam_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
         self.goal_exam_date_entry.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
 
         ttk.Label(input_frame, text="Target Score:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
@@ -195,9 +229,9 @@ class StudyTimerApp:
         save_button = ttk.Button(input_frame, text="Save Goal", command=self.add_exam_goal_callback)
         save_button.grid(row=5, column=0, columnspan=2, pady=10)
 
-        # Treeview frame
-        tree_frame = ttk.LabelFrame(parent_tab, text="Active Goals", padding=10)
-        tree_frame.pack(pady=10, padx=10, fill="both", expand=True)
+        # --- Treeview Frame ---
+        tree_frame = ttk.LabelFrame(main_frame, text="Active Goals", padding=10)
+        tree_frame.pack(pady=(0, 10), padx=10, fill="both", expand=True)
 
         self.goal_tree = ttk.Treeview(tree_frame, columns=("ID", "Date", "Subject", "Exam Name", "Target", "Status", "Notes"), show="headings")
         self.goal_tree.heading("ID", text="ID")
@@ -219,14 +253,14 @@ class StudyTimerApp:
         self.goal_tree.tag_configure('Achieved', background='#d9ead3')
         self.goal_tree.tag_configure('Not Achieved', background='#f4cccc')
 
-        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.goal_tree.yview)
-        self.goal_tree.configure(yscroll=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
+        tree_scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.goal_tree.yview)
+        self.goal_tree.configure(yscroll=tree_scrollbar.set)
+        tree_scrollbar.pack(side="right", fill="y")
         self.goal_tree.pack(side="left", fill="both", expand=True)
 
-        # Buttons frame
-        buttons_frame = ttk.Frame(parent_tab)
-        buttons_frame.pack(pady=5, padx=10, fill="x")
+        # --- Buttons Frame ---
+        buttons_frame = ttk.Frame(main_frame)
+        buttons_frame.pack(pady=(0, 10), padx=10, fill="x")
 
         achieved_button = ttk.Button(buttons_frame, text="Mark as Achieved", command=lambda: self.update_goal_status_callback("Achieved"))
         achieved_button.pack(side="left", padx=5)
@@ -246,9 +280,13 @@ class StudyTimerApp:
         input_frame.columnconfigure(3, weight=1)
 
         ttk.Label(input_frame, text="Date:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.mock_date_entry = ttk.Entry(input_frame)
+        if CALENDAR_AVAILABLE:
+            self.mock_date_entry = DateEntry(input_frame, width=12, background='darkblue',
+                                           foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
+        else:
+            self.mock_date_entry = ttk.Entry(input_frame)
+            self.mock_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
         self.mock_date_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        self.mock_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
 
         ttk.Label(input_frame, text="Subject:").grid(row=0, column=2, padx=5, pady=5, sticky="w")
         self.mock_selected_subject = tk.StringVar(value=self.subjects[0])
@@ -299,6 +337,35 @@ class StudyTimerApp:
         scrollbar.pack(side="right", fill="y")
         self.mock_tree.pack(side="left", fill="both", expand=True)
 
+        buttons_frame = ttk.Frame(parent_tab)
+        buttons_frame.pack(pady=5, padx=10, fill="x")
+        delete_button = ttk.Button(buttons_frame, text="Delete Result", command=self.delete_mock_exam_callback)
+        delete_button.pack(side="right", padx=5)
+
+    def setup_study_history_tab(self, parent_tab):
+        tree_frame = ttk.Frame(parent_tab)
+        tree_frame.pack(pady=5, padx=10, fill="both", expand=True)
+
+        self.study_history_tree = ttk.Treeview(tree_frame, columns=("ID", "Date", "Subject", "Minutes"), show="headings")
+        self.study_history_tree.heading("ID", text="ID")
+        self.study_history_tree.column("ID", width=40, stretch=tk.NO)
+        self.study_history_tree.heading("Date", text="Date")
+        self.study_history_tree.column("Date", width=100)
+        self.study_history_tree.heading("Subject", text="Subject")
+        self.study_history_tree.column("Subject", width=150)
+        self.study_history_tree.heading("Minutes", text="Minutes")
+        self.study_history_tree.column("Minutes", width=80)
+
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.study_history_tree.yview)
+        self.study_history_tree.configure(yscroll=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        self.study_history_tree.pack(side="left", fill="both", expand=True)
+
+        buttons_frame = ttk.Frame(parent_tab)
+        buttons_frame.pack(pady=5, padx=10, fill="x")
+        delete_button = ttk.Button(buttons_frame, text="Delete Record", command=self.delete_study_history_callback)
+        delete_button.pack(side="right", padx=5)
+
     def generate_report_callback(self):
         filename = report_generator.generate_weekly_report()
         if filename:
@@ -324,7 +391,10 @@ class StudyTimerApp:
             self.mock_tree.insert("", "end", values=values, iid=row['id'])
 
     def add_mock_exam_callback(self):
-        date = self.mock_date_entry.get()
+        if CALENDAR_AVAILABLE and hasattr(self.mock_date_entry, 'get_date'):
+            date = self.mock_date_entry.get_date().strftime('%Y-%m-%d')
+        else:
+            date = self.mock_date_entry.get()
         subject = self.mock_selected_subject.get()
         exam_name = self.mock_exam_name_entry.get()
         score = self.mock_score_entry.get()
@@ -353,6 +423,37 @@ class StudyTimerApp:
         self.load_mock_exams()
         messagebox.showinfo("Success", "Mock exam result saved successfully.")
 
+    def delete_mock_exam_callback(self):
+        selected_item = self.mock_tree.focus()
+        if not selected_item:
+            messagebox.showwarning("Selection Error", "Please select a result to delete.")
+            return
+
+        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete the selected result?"):
+            exam_id = int(selected_item)
+            database.delete_mock_exam(exam_id)
+            self.load_mock_exams()
+
+    # --- Study History Methods ---
+    def load_study_history(self):
+        for item in self.study_history_tree.get_children():
+            self.study_history_tree.delete(item)
+        df = database.get_all_records()
+        for index, row in df.iterrows():
+            self.study_history_tree.insert("", "end", values=(row['id'], row['date'], row['subject'], row['minutes']), iid=row['id'])
+
+    def delete_study_history_callback(self):
+        selected_item = self.study_history_tree.focus()
+        if not selected_item:
+            messagebox.showwarning("Selection Error", "Please select a record to delete.")
+            return
+
+        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete the selected record?"):
+            record_id = int(selected_item)
+            database.delete_study_record(record_id)
+            self.load_study_history()
+            self.update_progress_display()
+
     # --- Exam Goal Methods ---
     def load_exam_goals(self):
         for item in self.goal_tree.get_children():
@@ -365,7 +466,10 @@ class StudyTimerApp:
     def add_exam_goal_callback(self):
         subject = self.goal_subject_var.get()
         exam_name = self.goal_exam_name_entry.get()
-        exam_date = self.goal_exam_date_entry.get()
+        if CALENDAR_AVAILABLE and hasattr(self.goal_exam_date_entry, 'get_date'):
+            exam_date = self.goal_exam_date_entry.get_date().strftime('%Y-%m-%d')
+        else:
+            exam_date = self.goal_exam_date_entry.get()
         target_score = self.goal_target_score_entry.get()
         notes = self.goal_notes_text.get("1.0", tk.END).strip()
 
@@ -416,7 +520,7 @@ class StudyTimerApp:
             self.study_goals_tree.delete(item)
         df = database.get_goals()
         for index, row in df.iterrows():
-            self.study_goals_tree.insert("", "end", values=(row['goal_type'].capitalize(), row['subject'], row['target_minutes'], row['notes']))
+            self.study_goals_tree.insert("", "end", values=(row['id'], row['goal_type'].capitalize(), row['subject'], row['target_minutes'], row['notes']), iid=row['id'])
 
     def set_study_goal_callback(self):
         goal_type = self.study_goal_type.get()
@@ -435,12 +539,30 @@ class StudyTimerApp:
             messagebox.showwarning("Input Error", "Please enter a valid positive number for minutes.")
             return
 
-        database.set_goal(goal_type, subject, minutes, notes)
+        today = datetime.now().date()
+        if goal_type == 'daily':
+            start_date = today.strftime('%Y-%m-%d')
+        else: # weekly
+            start_date = (today - timedelta(days=today.weekday())).strftime('%Y-%m-%d')
+
+        database.set_goal(goal_type, subject, start_date, minutes, notes)
         self.study_goal_minutes_entry.delete(0, tk.END)
         self.study_goal_notes_entry.delete(0, tk.END)
         self.load_study_goals()
         self.update_progress_display()
         messagebox.showinfo("Success", "Study goal has been set successfully.")
+
+    def delete_study_goal_callback(self):
+        selected_item = self.study_goals_tree.focus()
+        if not selected_item:
+            messagebox.showwarning("Selection Error", "Please select a goal to delete.")
+            return
+
+        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete the selected goal?"):
+            goal_id = int(selected_item)
+            database.delete_study_goal(goal_id)
+            self.load_study_goals()
+            self.update_progress_display()
 
     def on_subject_change(self, *args):
         self.update_progress_display()
@@ -466,11 +588,12 @@ class StudyTimerApp:
     def update_progress_display(self):
         subject = self.selected_subject.get()
         self.goal_frame.config(text=f"Daily Goal Progress ({subject})")
-        target, progress = database.get_progress('daily', subject)
+        today = datetime.now().date()
+        target, progress = database.get_progress('daily', subject, today)
 
         if target is None:
             # Fallback to checking for an "All" subjects goal
-            target, progress = database.get_progress('daily', 'All')
+            target, progress = database.get_progress('daily', 'All', today)
             if target is not None:
                 self.goal_frame.config(text="Daily Goal Progress (All Subjects)")
             else:
@@ -493,6 +616,7 @@ class StudyTimerApp:
         database.add_record(today_date, subject, minutes)
         print(f"Record saved: {subject} - {minutes} minutes")
         self.update_progress_display()
+        self.load_study_history()
 
     def toggle_pomodoro_mode(self):
         self.reset_ui()

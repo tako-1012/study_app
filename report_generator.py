@@ -46,7 +46,7 @@ def generate_weekly_report():
     total_minutes = weekly_df['minutes'].sum()
     total_hours = total_minutes // 60
     remaining_minutes = total_minutes % 60
-    target_minutes, _ = database.get_progress('weekly', 'All')
+    target_minutes, _ = database.get_progress('weekly', 'All', today)
 
     pdf.set_font("helvetica", "B", 12)
     pdf.cell(0, 10, "Summary", 0, 1)

@@ -11,23 +11,3 @@
 *   **模試分析:** 模試の結果を記録・確認
 *   **レポート作成:** 週次の学習内容をPDFレポートとして出力
 *   **グラフ表示:** グラフで学習習慣を分析
-
-## 必要なもの
-
-*   Python 3
-*   以下のPythonライブラリ:
-    *   pandas
-    *   matplotlib
-    *   fpdf
-
-## インストール
-
-```
-pip install pandas matplotlib fpdf
-```
-
-## 使い方
-
-```
-python3 app.py
-```
