@@ -17,29 +17,16 @@ def init_db():
                 minutes INTEGER NOT NULL
             )
         """)
-        # Goals table
+        # Goals table - new schema
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS goals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 goal_type TEXT NOT NULL, -- 'daily' or 'weekly'
                 subject TEXT NOT NULL,   -- Specific subject or 'All'
+                start_date TEXT NOT NULL, -- Date for daily, or start of week for weekly
                 target_minutes INTEGER NOT NULL,
                 notes TEXT,
-                UNIQUE(goal_type, subject)
-            )
-        """)
-        # Add notes column to existing goals table if it doesn't exist
-        try:
-            cursor.execute("ALTER TABLE goals ADD COLUMN notes TEXT")
-        except sqlite3.OperationalError:
-            # Column already exists, which is fine
-            pass
-        # ToDo table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS todos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task TEXT NOT NULL,
-                is_done INTEGER NOT NULL DEFAULT 0
+                UNIQUE(goal_type, subject, start_date)
             )
         """)
         # Mock Exams table
@@ -87,46 +74,56 @@ def get_all_records():
         df = pd.read_sql_query("SELECT date, subject, minutes FROM study_log", conn)
     return df
 
-def set_goal(goal_type, subject, target_minutes, notes):
+def set_goal(goal_type, subject, start_date, target_minutes, notes):
     """Creates or updates a goal."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO goals (goal_type, subject, target_minutes, notes)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(goal_type, subject) DO UPDATE SET
+            INSERT INTO goals (goal_type, subject, start_date, target_minutes, notes)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(goal_type, subject, start_date) DO UPDATE SET
             target_minutes = excluded.target_minutes,
             notes = excluded.notes;
-        """, (goal_type, subject, target_minutes, notes))
+        """, (goal_type, subject, start_date, target_minutes, notes))
         conn.commit()
 
 def get_goals():
     """Retrieves all goals."""
     with sqlite3.connect(DB_FILE) as conn:
-        df = pd.read_sql_query("SELECT goal_type, subject, target_minutes, notes FROM goals", conn)
+        df = pd.read_sql_query("SELECT id, goal_type, subject, start_date, target_minutes, notes FROM goals ORDER BY start_date DESC", conn)
     return df
 
-def get_progress(goal_type, subject):
-    """Calculates the progress for a given goal."""
+def get_progress(goal_type, subject, for_date):
+    """Calculates the progress for a given goal for a specific date."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT target_minutes FROM goals WHERE goal_type=? AND subject=?", (goal_type, subject))
+
+        if goal_type == 'daily':
+            start_of_period = for_date.strftime('%Y-%m-%d')
+            end_of_period = start_of_period
+        elif goal_type == 'weekly':
+            start_of_period_dt = for_date - timedelta(days=for_date.weekday())
+            start_of_period = start_of_period_dt.strftime('%Y-%m-%d')
+            end_of_period_dt = start_of_period_dt + timedelta(days=6)
+            end_of_period = end_of_period_dt.strftime('%Y-%m-%d')
+        else:
+            return None, 0
+
+        # Find the goal for the period
+        cursor.execute("""
+            SELECT target_minutes FROM goals
+            WHERE goal_type=? AND subject=? AND start_date=?
+        """, (goal_type, subject, start_of_period))
         result = cursor.fetchone()
+
         if not result:
             return None, None # No goal set
 
         target_minutes = result[0]
-        today = datetime.now().date()
 
-        if goal_type == 'daily':
-            start_date = today
-        elif goal_type == 'weekly':
-            start_date = today - timedelta(days=today.weekday())
-        else:
-            return target_minutes, 0 # Should not happen
-
+        # Calculate progress for the period
         query_subject = "AND subject = ?" if subject != "All" else ""
-        params = [str(start_date), str(today)]
+        params = [start_of_period, end_of_period]
         if subject != "All":
             params.append(subject)
 
@@ -137,31 +134,6 @@ def get_progress(goal_type, subject):
         
         progress_minutes = cursor.fetchone()[0]
         return target_minutes, progress_minutes or 0
-
-# --- ToDo List Functions ---
-
-def add_todo(task):
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO todos (task) VALUES (?)", (task,))
-        conn.commit()
-
-def get_todos():
-    with sqlite3.connect(DB_FILE) as conn:
-        df = pd.read_sql_query("SELECT id, task, is_done FROM todos", conn)
-    return df
-
-def update_todo_status(task_id, is_done):
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute("UPDATE todos SET is_done = ? WHERE id = ?", (is_done, task_id))
-        conn.commit()
-
-def delete_todo(task_id):
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM todos WHERE id = ?", (task_id,))
-        conn.commit()
 
 # --- Mock Exam Functions ---
 

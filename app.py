@@ -31,7 +31,6 @@ class StudyTimerApp:
         # --- UI Setup ---
         self.setup_styles()
         self.setup_ui()
-        self.load_todos()
         self.load_mock_exams()
         self.load_exam_goals()
         self.load_study_goals()
@@ -40,7 +39,6 @@ class StudyTimerApp:
     def setup_styles(self):
         os_name = platform.system()
         default_font_family = "Ubuntu" if os_name == "Linux" else ("Segoe UI" if os_name == "Windows" else "San Francisco")
-        self.strikethrough_font = font.Font(family=default_font_family, size=12, overstrike=True)
         style = ttk.Style()
         style.theme_use('clam')
         style.configure('.', font=(default_font_family, 12))
@@ -65,19 +63,16 @@ class StudyTimerApp:
 
         timer_tab = ttk.Frame(notebook)
         study_goals_tab = ttk.Frame(notebook)
-        todo_tab = ttk.Frame(notebook)
         exam_goals_tab = ttk.Frame(notebook)
         mock_exam_tab = ttk.Frame(notebook)
 
         notebook.add(timer_tab, text='Timer')
         notebook.add(study_goals_tab, text='Study Goals')
-        notebook.add(todo_tab, text='ToDo List')
         notebook.add(exam_goals_tab, text='Exam Goals')
         notebook.add(mock_exam_tab, text='Mock Exams')
 
         self.setup_timer_tab(timer_tab)
         self.setup_study_goals_tab(study_goals_tab)
-        self.setup_todo_tab(todo_tab)
         self.setup_exam_goals_tab(exam_goals_tab)
         self.setup_mock_exam_tab(mock_exam_tab)
 
@@ -168,31 +163,6 @@ class StudyTimerApp:
         self.study_goals_tree.heading("Notes", text="Notes")
         self.study_goals_tree.column("Notes", width=250)
         self.study_goals_tree.pack(fill="both", expand=True)
-
-    def setup_todo_tab(self, parent_tab):
-        # Input frame
-        input_frame = ttk.Frame(parent_tab, padding=5)
-        input_frame.pack(fill="x")
-        self.todo_entry = ttk.Entry(input_frame, width=40)
-        self.todo_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
-        add_button = ttk.Button(input_frame, text="Add Task", command=self.add_todo_callback)
-        add_button.pack(side="left")
-
-        # Treeview to display tasks
-        self.todo_tree = ttk.Treeview(parent_tab, columns=("ID", "Task"), show="headings", selectmode="browse")
-        self.todo_tree.heading("ID", text="ID")
-        self.todo_tree.heading("Task", text="Task")
-        self.todo_tree.column("ID", width=40, stretch=tk.NO)
-        self.todo_tree.pack(pady=5, padx=5, fill="both", expand=True)
-        self.todo_tree.tag_configure('done', font=self.strikethrough_font, foreground='gray')
-
-        # ToDo buttons frame
-        todo_button_frame = ttk.Frame(parent_tab, padding=5)
-        todo_button_frame.pack(fill="x")
-        toggle_done_button = ttk.Button(todo_button_frame, text="Toggle Done", command=self.toggle_todo_status_callback)
-        toggle_done_button.pack(side="left", padx=5)
-        delete_button = ttk.Button(todo_button_frame, text="Delete Task", command=self.delete_todo_callback)
-        delete_button.pack(side="left", padx=5)
 
     def setup_exam_goals_tab(self, parent_tab):
         # Input frame
@@ -335,47 +305,6 @@ class StudyTimerApp:
             messagebox.showinfo("Report Generated", f"Successfully generated report: {filename}")
         else:
             messagebox.showwarning("Report Error", "No data available for the last 7 days to generate a report.")
-
-    # --- ToDo Methods ---
-    def load_todos(self):
-        for item in self.todo_tree.get_children():
-            self.todo_tree.delete(item)
-        df = database.get_todos()
-        for index, row in df.iterrows():
-            tags = ('done',) if row['is_done'] else ()
-            self.todo_tree.insert("", "end", values=(row['id'], row['task']), tags=tags, iid=row['id'])
-
-    def add_todo_callback(self):
-        task = self.todo_entry.get()
-        if task:
-            database.add_todo(task)
-            self.todo_entry.delete(0, tk.END)
-            self.load_todos()
-        else:
-            messagebox.showwarning("Input Error", "Task cannot be empty.")
-
-    def toggle_todo_status_callback(self):
-        selected_item = self.todo_tree.focus()
-        if not selected_item:
-            messagebox.showwarning("Selection Error", "Please select a task to mark as done/undone.")
-            return
-        
-        task_id = int(selected_item)
-        current_tags = self.todo_tree.item(selected_item, 'tags')
-        new_status = 0 if 'done' in current_tags else 1
-        database.update_todo_status(task_id, new_status)
-        self.load_todos()
-
-    def delete_todo_callback(self):
-        selected_item = self.todo_tree.focus()
-        if not selected_item:
-            messagebox.showwarning("Selection Error", "Please select a task to delete.")
-            return
-        
-        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete the selected task?"):
-            task_id = int(selected_item)
-            database.delete_todo(task_id)
-            self.load_todos()
 
     # --- Mock Exam Methods ---
     def load_mock_exams(self):
