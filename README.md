@@ -1,32 +1,32 @@
-# Study Time Logger
+# 学習時間記録アプリ
 
-A desktop application to help students track their study time, set goals, and monitor their progress.
+学習時間、目標、進捗を記録・管理するためのデスクトップアプリケーションです。
 
-## Features
+## 機能
 
-*   **Study Timer:** A timer to track study sessions, with support for the Pomodoro technique.
-*   **Goal Setting:** Set daily and weekly goals for study time, both overall and per subject.
-*   **Progress Tracking:** Visualize your daily progress towards your study goals.
-*   **Exam Management:** Keep track of upcoming exams and set target scores.
-*   **Mock Exam Analysis:** Record and review the results of mock exams.
-*   **Reporting:** Generate weekly PDF reports of your study activity.
-*   **Visualization:** Analyze your study habits with charts and graphs.
+*   **学習タイマー:** ポモドーロテクニックにも対応した、学習時間を記録するタイマー
+*   **目標設定:** 全体および科目ごとに、日次・週次の学習時間目標を設定
+*   **進捗の可視化:** 日々の学習目標に対する進捗を視覚的に確認
+*   **試験管理:** 試験の予定や目標点数を記録
+*   **模試分析:** 模試の結果を記録・確認
+*   **レポート作成:** 週次の学習内容をPDFレポートとして出力
+*   **グラフ表示:** グラフで学習習慣を分析
 
-## Requirements
+## 必要なもの
 
 *   Python 3
-*   The following Python libraries:
+*   以下のPythonライブラリ:
     *   pandas
     *   matplotlib
     *   fpdf
 
-## Installation
+## インストール
 
 ```
 pip install pandas matplotlib fpdf
 ```
 
-## Usage
+## 使い方
 
 ```
 python3 app.py
